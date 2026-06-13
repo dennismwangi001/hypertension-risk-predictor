@@ -231,7 +231,7 @@ elif page == "🔍 Feature Importance":
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        xgb_model = models['XGBoost']
+        xgb_model = models['xgboost']
         preprocessor = xgb_model.named_steps['preprocessor']
         try:
             feature_names_out = preprocessor.get_feature_names_out()
