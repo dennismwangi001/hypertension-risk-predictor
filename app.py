@@ -18,7 +18,7 @@ st.set_page_config(
 
 # Define Image URLs (Replace with your own links if desired)
 SIDEBAR_BG = "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80"
-MAIN_BG = "https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80"
+MAIN_BG = "https://www.bing.com/images/search?view=detailV2&ccid=oRB4nEDt&id=E18FD00591C0B097A009DBB3BEE6D81AE5D232D1&thid=OIP.oRB4nEDtRYbZBVAd8W2VDwHaEg&mediaurl=https%3a%2f%2fwww.pulse-cardiology.com%2fwp-content%2fuploads%2f2020%2f07%2fHD.jpeg&cdnurl=https%3a%2f%2fth.bing.com%2fth%2fid%2fR.a110789c40ed4586d905501df16d950f%3frik%3d0TLS5RrY5r6z2w%26pid%3dImgRaw%26r%3d0&exph=3185&expw=5231&q=heart+disease+heartbeat&FORM=IRPRST&ck=1FD6A3FDB63AADA4F78AE1660F21E13E&selectedIndex=2&itb=0"
 
 # Inject CSS for Background Images and Readability
 st.markdown(f"""
