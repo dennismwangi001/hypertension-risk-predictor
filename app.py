@@ -2,340 +2,240 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import plotly.graph_objects as go
 import plotly.express as px
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix, roc_curve
+import plotly.graph_objects as go
 
 # -----------------------------------------------------------------------------
-# 1. Custom CSS Styling for Readability & Aesthetics
+# 1. PAGE CONFIGURATION & STYLING
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Hypertension AI Predictor",
+    page_title="Hypertension Risk Predictor",
     page_icon="🩺",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Injecting custom CSS to fix contrast and add styling
-st.markdown("""
+# Custom CSS for Backgrounds and Styling
+# Note: Replace the URLs below with your local file paths if you have local images
+# e.g., url('images/main_bg.jpg')
+main_bg_image = "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80"
+sidebar_bg_image = "https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60"
+
+page_bg_img = f"""
 <style>
-    /* Global Background & Text Colors */
-    .main {
-        background-color: #0f172a; /* Deep Slate Blue */
-        color: #e2e8f0; /* Light Gray Text */
-    }
-    
-    /* Sidebar Styling - Glassmorphism Effect */
-    [data-testid="stSidebar"] {
-        background-color: #1e293b;
-        border-right: 1px solid #334155;
-    }
-    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] p {
-        color: #f8fafc !important;
-    }
-    
-    /* Metric Cards Styling */
-    div[data-testid="metric-container"] {
-        background-color: #1e293b;
-        border: 1px solid #334155;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-    }
-    div[data-testid="metric-container"] p {
-        color: #94a3b8 !important; /* Label Color */
-    }
-    div[data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        color: #38bdf8 !important; /* Value Color - Sky Blue */
-        font-size: 2rem !important;
-    }
+[data-testid="stAppViewContainer"] > .main {{
+    background-image: url("{main_bg_image}");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}}
 
-    /* Headers & Titles */
-    h1, h2, h3 {
-        color: #f1f5f9 !important;
-        font-weight: 600;
-        margin-bottom: 1rem;
-    }
-    
-    /* Form Inputs Styling */
-    .stTextInput > div > div > input, 
-    .stNumberInput > div > div > input,
-    .stSelectbox > div > div > div {
-        background-color: #1e293b;
-        color: #f8fafc;
-        border: 1px solid #475569;
-    }
-    
-    /* Buttons */
-    .stButton > button {
-        background-color: #0ea5e9;
-        color: white;
-        border-radius: 8px;
-        font-weight: bold;
-        transition: all 0.3s ease;
-    }
-    .stButton > button:hover {
-        background-color: #0284c7;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
-    }
+[data-testid="stSidebar"] > div:first-child {{
+    background-image: url("{sidebar_bg_image}");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}}
 
-    /* Alerts & Info Boxes */
-    .stAlert {
-        background-color: #1e293b !important;
-        border: 1px solid #334155 !important;
-        color: #e2e8f0 !important;
-    }
+[data-testid="stSidebar"] {{
+    background-color: rgba(0, 0, 0, 0.7); /* Dark overlay for sidebar */
+}}
+
+/* Text color adjustments for readability against backgrounds */
+[data-testid="stAppViewContainer"] {{
+    background-color: rgba(255, 255, 255, 0.9); /* White overlay for main content */
+}}
+
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {{
+    color: #2c3e50;
+}}
+
+.recommendation-box {{
+    background-color: #e8f4f8;
+    border-left: 5px solid #3498db;
+    padding: 15px;
+    margin-top: 20px;
+    border-radius: 5px;
+}}
 </style>
-""", unsafe_allow_html=True)
+"""
+st.markdown(page_bg_img, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. Load Models & Data (Cached for speed)
+# 2. LOAD DATA & MODELS
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def load_models():
-    models = {}
     try:
-        models['XGBoost'] = joblib.load('xgboost_model.pkl')
+        xgb_model = joblib.load('xgboost_model.pkl')
+        rf_model = joblib.load('random_forest_model.pkl')
+        # Assuming you might have a logistic regression model saved, if not, this can be skipped
+        # lr_model = joblib.load('logistic_regression_model.pkl') 
+        return xgb_model, None # Return None for LR if not saved
     except FileNotFoundError:
-        st.warning("⚠️ xgboost_model.pkl not found.")
-    try:
-        models['Random Forest'] = joblib.load('random_forest_model.pkl')
-    except FileNotFoundError:
-        st.warning("⚠️ random_forest_model.pkl not found.")
-    return models
-
-@st.cache_data
-def load_test_data():
-    try:
-        data = joblib.load('test_data.pkl')
-        if isinstance(data, tuple):
-            return data[0], data[1]
-        elif isinstance(data, dict):
-            return data.get('X_test'), data.get('y_test')
-        else:
-            return data, None
-    except FileNotFoundError:
-        st.error("❌ test_data.pkl not found.")
+        st.error("Model files not found. Please ensure 'xgboost_model.pkl' and 'random_forest_model.pkl' are in the directory.")
         return None, None
 
-models = load_models()
-X_test, y_test = load_test_data()
+@st.cache_data
+def load_feature_importance():
+    try:
+        df_imp = pd.read_csv('feature_importance_xgboost.csv')
+        return df_imp
+    except FileNotFoundError:
+        return None
+
+# Load models
+xgb_model, lr_model = load_models()
+feature_importance_df = load_feature_importance()
+
+# Define feature names expected by the model (based on your notebook)
+# Note: Ensure these match exactly what was used during training
+feature_names = [
+    'BMI', 'age', 'married', 'male.gender', 'hgb_centered', 
+    'adv_HIV', 'arv_naive', 'urban.clinic', 'log_creat_centered'
+]
 
 # -----------------------------------------------------------------------------
-# 3. Sidebar Navigation
+# 3. SIDEBAR INPUTS
 # -----------------------------------------------------------------------------
-st.sidebar.title("Navigation")
+st.sidebar.title("🩺 Patient Data Input")
+st.sidebar.markdown("Please enter the patient's clinical details below.")
 
-# 🖼️ SIDEBAR IMAGE PLACEHOLDER
-sidebar_image_url = "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80"
-st.sidebar.image(sidebar_image_url, use_container_width=True)
-st.sidebar.caption("AI-Powered Health Diagnostics")
+# Inputs
+age = st.sidebar.number_input("Age (Years)", min_value=18, max_value=100, value=45)
+bmi = st.sidebar.number_input("BMI (kg/m²)", min_value=15.0, max_value=50.0, value=25.0)
+gender = st.sidebar.selectbox("Gender", ["Female", "Male"])
+male_gender_val = 1 if gender == "Male" else 0
 
-page = st.sidebar.radio(
-    "Select Page",
-    ["📊 Dashboard", "🔮 Predict Risk", "📈 Model Performance", "🔍 Feature Importance", "ℹ️ About & Data Info"]
-)
+married = st.sidebar.selectbox("Marital Status", ["Single", "Married"])
+married_val = 1 if married == "Married" else 0
 
-st.sidebar.markdown("---")
-if not models:
-    st.sidebar.warning("⚠️ Models not loaded.")
-else:
-    st.sidebar.success(f"✅ {len(models)} model(s) active")
+urban_clinic = st.sidebar.selectbox("Clinic Location", ["Rural", "Urban"])
+urban_val = 1 if urban_clinic == "Urban" else 0
+
+# Clinical Metrics
+sbp = st.sidebar.number_input("Systolic BP (mmHg)", min_value=80, max_value=250, value=120)
+dbp = st.sidebar.number_input("Diastolic BP (mmHg)", min_value=40, max_value=150, value=80)
+
+hgb = st.sidebar.number_input("Hemoglobin (g/dL) - Centered", value=0.0, format="%.2f", help="Enter centered Hgb value if known, else 0")
+adv_hiv = st.sidebar.selectbox("Advanced HIV Status", ["No", "Yes"])
+adv_hiv_val = 1 if adv_hiv == "Yes" else 0
+
+arv_naive = st.sidebar.selectbox("ARV Naive (Not on treatment)", ["No (On ARV)", "Yes (Naive)"])
+arv_naive_val = 1 if arv_naive == "Yes (Naive)" else 0
+
+log_creat = st.sidebar.number_input("Log Creatinine (Centered)", value=0.0, format="%.4f", help="Enter centered Log Creatinine")
 
 # -----------------------------------------------------------------------------
-# 4. Pages
+# 4. MAIN DASHBOARD
 # -----------------------------------------------------------------------------
-if page == "📊 Dashboard":
-    st.title("🩺 Hypertension Prediction Dashboard")
-    
-    # 🖼️ DASHBOARD BANNER IMAGE
-    dashboard_image_url = "https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80"
-    st.image(dashboard_image_url, use_container_width=True, caption="Advanced Clinical Decision Support System")
-    
-    st.markdown("### 📌 Overview")
-    st.markdown("This dashboard provides real-time hypertension risk assessment using ensemble machine learning. All predictions are generated without relying on blood pressure metrics to ensure clinical applicability in pre-screening scenarios.")
-    
-    if X_test is not None and y_test is not None:
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Test Patients", len(X_test))
-        col2.metric("Hypertension Cases", int(y_test.sum()))
-        col3.metric("Normal Cases", int((y_test == 0).sum()))
-        col4.metric("Active Models", len(models))
-    else:
-        st.warning("📂 Test data not loaded.")
+st.title("🩺 Hypertension Risk Prediction Dashboard")
+st.markdown("This tool uses Machine Learning to predict the likelihood of hypertension based on clinical and demographic factors.")
 
-    st.markdown("---")
-    st.markdown("### 📊 Target Variable Distribution")
-    if X_test is not None and y_test is not None:
-        fig = px.pie(
-            names=['Normal', 'Hypertension'], 
-            values=[int((y_test == 0).sum()), int(y_test.sum())],
-            color_discrete_sequence=['#10b981', '#ef4444'], # Emerald Green & Red
-            hole=0.4
-        )
-        fig.update_layout(
-            legend_title="Class",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#e2e8f0', size=14)
-        )
-        st.plotly_chart(fig, use_container_width=True)
+col1, col2 = st.columns([2, 1])
 
-elif page == "🔮 Predict Risk":
-    st.title("🔮 Patient Risk Assessment")
-    st.markdown("Enter the patient's clinical parameters below. The system will output a probability score and clinical recommendation.")
+with col1:
+    st.subheader("Prediction Result")
     
-    with st.form("prediction_form"):
-        st.markdown("### 📋 Patient Details")
-        col1, col2 = st.columns(2)
+    if xgb_model is not None:
+        # Prepare input data for prediction
+        input_data = pd.DataFrame({
+            'BMI': [bmi],
+            'age': [age],
+            'married': [married_val],
+            'male.gender': [male_gender_val],
+            'hgb_centered': [hgb],
+            'adv_HIV': [adv_hiv_val],
+            'arv_naive': [arv_naive_val],
+            'urban.clinic': [urban_val],
+            'log_creat_centered': [log_creat]
+        })
         
-        with col1:
-            age = st.slider("Age (years)", 18, 100, 40)
-            bmi = st.slider("BMI (kg/m²)", 15.0, 50.0, 22.0, 0.1)
-            hgb_centered = st.number_input("Hemoglobin (Centered)", value=0.0, step=0.1)
-            married = st.selectbox("Married Status", [0, 1], format_func=lambda x: "Yes" if x==1 else "No")
-            male_gender = st.selectbox("Male Gender", [0, 1], format_func=lambda x: "Yes" if x==1 else "No")
-            adv_HIV = st.selectbox("Advanced HIV", [0, 1], format_func=lambda x: "Yes" if x==1 else "No")
-            
-        with col2:
-            survtime = st.number_input("Survival Time (days)", 0, 5000, 500, step=10)
-            event = st.selectbox("Event Occurred", [0, 1], format_func=lambda x: "Yes" if x==1 else "No")
-            arv_naive = st.selectbox("ARV Naive", [0, 1], format_func=lambda x: "Yes" if x==1 else "No")
-            urban_clinic = st.selectbox("Urban Clinic", [0, 1], format_func=lambda x: "Yes" if x==1 else "No")
-            log_creat_centered = st.number_input("Log Creatinine (Centered)", value=0.0, step=0.1)
-            
-        submit_button = st.form_submit_button("🔍 Calculate Risk", type="primary", use_container_width=True)
+        # Ensure column order matches training
+        input_data = input_data[feature_names]
+
+        # Predict
+        prediction_proba = xgb_model.predict_proba(input_data)[0][1]
+        prediction_class = xgb_model.predict(input_data)[0]
         
-    if submit_button:
-        if not models:
-            st.error("No models loaded.")
+        # Display Result
+        if prediction_class == 1:
+            st.error(f"**High Risk**: The model predicts a {prediction_proba*100:.2f}% probability of Hypertension.")
         else:
-            model = models.get('XGBoost') or list(models.values())[0]
-            
-            input_data = pd.DataFrame({
-                'age': [age], 'BMI': [bmi], 'married': [married], 'male.gender': [male_gender],
-                'hgb_centered': [hgb_centered], 'adv_HIV': [adv_HIV], 'survtime': [survtime],
-                'event': [event], 'arv_naive': [arv_naive], 'urban.clinic': [urban_clinic],
-                'log_creat_centered': [log_creat_centered]
-            })
-            
-            try:
-                prediction = model.predict(input_data)[0]
-                probability = model.predict_proba(input_data)[0][1] * 100
-                
-                st.markdown("---")
-                if prediction == 1:
-                    st.error(f"⚠️ **High Risk**: The model predicts a **{probability:.1f}%** chance of hypertension.")
-                    st.markdown("💡 *Recommendation*: Schedule immediate clinical evaluation. Monitor BP, lifestyle factors, and consider pharmacological intervention per guidelines.")
-                else:
-                    st.success(f"✅ **Low Risk**: The model predicts a **{probability:.1f}%** chance of hypertension.")
-                    st.markdown("💡 *Recommendation*: Continue routine health monitoring. Maintain healthy diet, exercise, and regular check-ups.")
-            except Exception as e:
-                st.error(f"Prediction failed: {e}")
+            st.success(f"**Low Risk**: The model predicts a {prediction_proba*100:.2f}% probability of Hypertension.")
 
-elif page == "📈 Model Performance":
-    st.title("📈 Model Performance Evaluation")
-    st.markdown("Compare predictive power across trained models on the held-out test set.")
-    
-    if not models:
-        st.error("No models found.")
+        # --- CLINICAL RECOMMENDATIONS ENGINE ---
+        st.markdown("---")
+        st.subheader("📋 Clinical Recommendations")
+        
+        recommendations = []
+        
+        # BMI Logic
+        if bmi >= 30:
+            recommendations.append("🔴 **Obesity Alert**: BMI is ≥ 30. Recommend immediate lifestyle intervention (diet/exercise) and consider pharmacological support if comorbidities exist.")
+        elif bmi >= 25:
+            recommendations.append("🟡 **Overweight Alert**: BMI is ≥ 25. Recommend dietary counseling and increased physical activity.")
+        
+        # Age Logic
+        if age > 50:
+            recommendations.append("🟡 **Age Factor**: Patient is over 50. Regular monitoring of arterial stiffness and blood pressure is recommended.")
+        
+        # HIV Logic
+        if adv_hiv_val == 1:
+            recommendations.append("🔴 **Advanced HIV**: Increased risk of inflammation-induced hypertension. Monitor closely for drug interactions if starting antihypertensives.")
+        
+        if arv_naive_val == 1:
+            recommendations.append("🟡 **ARV Naive**: Initiate ART consultation. Uncontrolled HIV contributes to vascular inflammation.")
+        
+        # Kidney Logic
+        if log_creat > 0.5: # Arbitrary threshold for example, adjust based on clinical standards
+            recommendations.append("🔴 **Kidney Function**: Elevated creatinine levels detected. Evaluate renal function immediately as it may be secondary to or causing hypertension.")
+
+        # General BP Logic
+        if sbp >= 140 or dbp >= 90:
+            recommendations.append("🔴 **Current BP High**: Immediate confirmation of BP reading required. Consider initiating antihypertensive therapy per guidelines.")
+        
+        if not recommendations:
+            recommendations.append("🟢 **Routine Care**: Continue routine monitoring. Maintain healthy lifestyle.")
+
+        # Display Recommendations in a styled box
+        rec_text = "\n\n".join(recommendations)
+        st.markdown(f'<div class="recommendation-box">{rec_text}</div>', unsafe_allow_html=True)
+
     else:
-        model_name = st.selectbox("Select Model to Evaluate", list(models.keys()))
-        model = models[model_name]
-        
-        if X_test is not None and y_test is not None:
-            y_pred = model.predict(X_test)
-            y_prob = model.predict_proba(X_test)[:, 1]
-            
-            st.markdown("### 🎯 Key Metrics")
-            col1, col2, col3, col4, col5 = st.columns(5)
-            col1.metric("Accuracy", f"{accuracy_score(y_test, y_pred):.4f}")
-            col2.metric("Precision", f"{precision_score(y_test, y_pred):.4f}")
-            col3.metric("Recall", f"{recall_score(y_test, y_pred):.4f}")
-            col4.metric("F1-Score", f"{f1_score(y_test, y_pred):.4f}")
-            col5.metric("ROC-AUC", f"{roc_auc_score(y_test, y_prob):.4f}")
-            
-            st.markdown("---")
-            col_chart1, col_chart2 = st.columns(2)
-            
-            with col_chart1:
-                st.subheader("Confusion Matrix")
-                cm = confusion_matrix(y_test, y_pred)
-                fig_cm = px.imshow(cm, text_auto=True, aspect="auto", 
-                                   labels=dict(x="Predicted", y="Actual", color="Count"),
-                                   x=['Normal (0)', 'Hypertension (1)'],
-                                   y=['Normal (0)', 'Hypertension (1)'],
-                                   color_continuous_scale='Blues')
-                fig_cm.update_layout(
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='#e2e8f0')
-                )
-                st.plotly_chart(fig_cm, use_container_width=True)
-            
-            with col_chart2:
-                st.subheader("ROC Curve")
-                fpr, tpr, thresholds = roc_curve(y_test, y_prob)
-                fig_roc = go.Figure()
-                fig_roc.add_trace(go.Scatter(x=fpr, y=tpr, mode='lines', name=f'ROC (AUC = {roc_auc_score(y_test, y_prob):.3f})', line=dict(color='#38bdf8', width=3)))
-                fig_roc.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode='lines', name='Random Guess', line=dict(color='#94a3b8', width=2, dash='dash')))
-                fig_roc.update_layout(
-                    xaxis_title='False Positive Rate', yaxis_title='True Positive Rate', 
-                    xaxis=dict(range=[0, 1]), yaxis=dict(range=[0, 1.05]), height=400,
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='#e2e8f0')
-                )
-                st.plotly_chart(fig_roc, use_container_width=True)
+        st.warning("Models are not loaded. Please check the file paths.")
 
-elif page == "🔍 Feature Importance":
-    st.title("🔍 Feature Importance Analysis")
-    st.markdown("Understanding which features drive the model's predictions is crucial for clinical interpretability.")
+with col2:
+    st.subheader("Feature Importance")
     
-    if 'XGBoost' in models:
-        xgb_model = models['XGBoost']
-        preprocessor = xgb_model.named_steps['preprocessor']
-        feature_names_out = preprocessor.get_feature_names_out()
-        importances = xgb_model.named_steps['classifier'].feature_importances_
+    if feature_importance_df is not None:
+        # Select Box for Model Selection (Even if we only have XGBoost data loaded, we can structure it for future)
+        # For now, we use the loaded XGBoost data. If you have others, you can load them similarly.
+        model_choice = st.selectbox("Select Model for Importance", ["XGBoost"]) 
         
-        feat_imp_df = pd.DataFrame({'Feature': feature_names_out, 'Importance': importances})
-        feat_imp_df = feat_imp_df.sort_values(by='Importance', ascending=True).tail(10)
+        # Filter data based on selection (Currently only XGBoost is loaded from CSV)
+        # If you add more CSVs, you can load them here and switch dataframes
+        df_plot = feature_importance_df.copy()
         
+        # Create Plotly Bar Chart
         fig = px.bar(
-            feat_imp_df, x='Importance', y='Feature', orientation='h',
-            color='Importance', color_continuous_scale='Viridis'
+            df_plot, 
+            x='Importance', 
+            y='Feature',
+            orientation='h',
+            title=f"Top Predictors ({model_choice})",
+            color='Importance',
+            color_continuous_scale='Viridis'
         )
-        fig.update_layout(
-            height=500, 
-            margin=dict(l=20, r=20, t=20, b=20),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#e2e8f0', size=14)
-        )
+        fig.update_layout(yaxis={'categoryorder':'total ascending'})
         st.plotly_chart(fig, use_container_width=True)
+        
+        st.caption("Feature importance calculated using Permutation Importance on the XGBoost model.")
     else:
-        st.warning("XGBoost model not found.")
+        st.info("Feature importance data not available.")
 
-elif page == "ℹ️ About & Data Info":
-    st.title("ℹ️ About the Model & Data")
-    
-    st.markdown("""
-    ### 🎯 Objective
-    This application predicts the likelihood of hypertension based on clinical and demographic features, **strictly avoiding data leakage**.
-    
-    ### 🛡️ Data Leakage Prevention
-    The following columns were explicitly **dropped** from the training data because they directly reveal or are derived from the target variable:
-    - `ID` (Administrative)
-    - `SBP` (Systolic Blood Pressure - Direct indicator)
-    - `DBP` (Diastolic Blood Pressure - Direct indicator)
-    - `SBP_ge120` (Derived directly from SBP)
-    - `IPW_weight` (Administrative weighting)
-    
-    ### 🧠 Models Used
-    1. **XGBoost**: A powerful gradient boosting algorithm, excellent for tabular data.
-    2. **Random Forest**: An ensemble of decision trees, robust to overfitting.
-    
-    ### ⚠️ Disclaimer
-    This tool is for **educational and demonstrative purposes only**. It should not replace professional medical diagnosis or advice.
-    """)
+# Footer
+st.markdown("---")
+st.markdown("© 2026 Hypertension Prediction System. For clinical decision support only.")
