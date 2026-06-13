@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import os
 import plotly.graph_objects as go
 import plotly.express as px
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix, roc_curve
@@ -45,6 +44,7 @@ def load_metadata():
         st.stop()
     return joblib.load('test_data.pkl'), joblib.load('feature_names.pkl')
 
+import os
 models = load_models()
 test_data, feature_names = load_metadata()
 X_test, y_test = test_data['X_test'], test_data['y_test']
@@ -53,7 +53,10 @@ X_test, y_test = test_data['X_test'], test_data['y_test']
 # 3. Sidebar Navigation
 # -----------------------------------------------------------------------------
 st.sidebar.title("🧭 Navigation")
-st.sidebar.image("https://www.bing.com/images/search?view=detailV2&ccid=oRB4nEDt&id=E18FD00591C0B097A009DBB3BEE6D81AE5D232D1&thid=OIP.oRB4nEDtRYbZBVAd8W2VDwHaEg&mediaurl=https%3a%2f%2fwww.pulse-cardiology.com%2fwp-content%2fuploads%2f2020%2f07%2fHD.jpeg&cdnurl=https%3a%2f%2fth.bing.com%2fth%2fid%2fR.a110789c40ed4586d905501df16d950f%3frik%3d0TLS5RrY5r6z2w%26pid%3dImgRaw%26r%3d0&exph=3185&expw=5231&q=heart+disease+heartbeat&FORM=IRPRST&ck=1FD6A3FDB63AADA4F78AE1660F21E13E&selectedIndex=2&itb=0&cbir=sbi", use_container_width=True)
+
+# 🖼️ SIDEBAR IMAGE PLACEHOLDER: Replace the URL below with your image link
+sidebar_image_url = "https://via.placeholder.com/300x100/1f4e79/ffffff?text=Hypertension+AI"
+st.sidebar.image(sidebar_image_url, use_container_width=True)
 
 page = st.sidebar.radio(
     "Select Page",
@@ -69,6 +72,12 @@ st.sidebar.info("🛡️ Leakage columns (SBP, DBP, ID, SBP_ge120) were excluded
 # -----------------------------------------------------------------------------
 if page == "📊 Dashboard":
     st.title("🩺 Hypertension Prediction Dashboard")
+    
+    # 🖼️ DASHBOARD IMAGE PLACEHOLDER: Replace the URL below with your image link
+    dashboard_image_url = "https://via.placeholder.com/1200x250/4ecdc4/ffffff?text=AI-Powered+Clinical+Decision+Support"
+    st.image(dashboard_image_url, use_container_width=True)
+    
+    st.markdown("### 📌 Overview")
     st.markdown("Welcome to the Hypertension Risk Assessment Dashboard. This tool leverages advanced machine learning to predict hypertension risk while strictly avoiding data leakage.")
     
     col1, col2, col3, col4 = st.columns(4)
@@ -114,39 +123,47 @@ elif page == "🔮 Predict Risk":
         submit_button = st.form_submit_button("🔍 Calculate Risk", type="primary", use_container_width=True)
         
     if submit_button:
-        # CRASH PREVENTION: Ensure exact column order and names as training data
-        input_data = pd.DataFrame({
-            'age': [age], 'BMI': [bmi], 'married': [married], 'male.gender': [male_gender],
-            'hgb_centered': [hgb_centered], 'adv_HIV': [adv_HIV], 'survtime': [survtime],
-            'event': [event], 'arv_naive': [arv_naive], 'urban.clinic': [urban_clinic],
-            'log_creat_centered': [log_creat_centered]
-        })
-        
-        # Ensure columns are in the exact order the model expects
-        input_data = input_data[feature_names]
-        
-        st.markdown("---")
-        st.subheader("📊 Model Predictions")
-        
-        # Get predictions from all 3 models
-        results = []
-        for model_name, model in models.items():
-            pred = model.predict(input_data)[0]
-            prob = model.predict_proba(input_data)[0][1] * 100
-            results.append({
-                "Model": model_name,
-                "Prediction": "High Risk ⚠️" if pred == 1 else "Low Risk ✅",
-                "Probability": f"{prob:.1f}%"
+        if not models:
+            st.error("No models loaded. Cannot make predictions.")
+        else:
+            model = models.get('XGBoost') or models.get('Random Forest')
+            
+            # Ensure columns are in the exact order the model expects
+            input_data = pd.DataFrame({
+                'age': [age], 'BMI': [bmi], 'married': [married], 'male.gender': [male_gender],
+                'hgb_centered': [hgb_centered], 'adv_HIV': [adv_HIV], 'survtime': [survtime],
+                'event': [event], 'arv_naive': [arv_naive], 'urban.clinic': [urban_clinic],
+                'log_creat_centered': [log_creat_centered]
             })
             
-        st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
-        
-        # Consensus logic
-        high_risk_count = sum(1 for r in results if "High Risk" in r["Prediction"])
-        if high_risk_count >= 2:
-            st.error("⚠️ **Consensus: High Risk**\n\nThe majority of models predict a high risk of hypertension. Clinical evaluation is strongly recommended.")
-        else:
-            st.success("✅ **Consensus: Low Risk**\n\nThe majority of models predict a low risk. Continue routine health monitoring.")
+            try:
+                prediction = model.predict(input_data)[0]
+                probability = model.predict_proba(input_data)[0][1] * 100
+                
+                st.markdown("---")
+                st.subheader("📊 Model Predictions")
+                
+                # Show predictions from all models
+                results = []
+                for model_name, mdl in models.items():
+                    pred = mdl.predict(input_data)[0]
+                    prob = mdl.predict_proba(input_data)[0][1] * 100
+                    results.append({
+                        "Model": model_name,
+                        "Prediction": "High Risk ⚠️" if pred == 1 else "Low Risk ✅",
+                        "Probability": f"{prob:.1f}%"
+                    })
+                    
+                st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
+                
+                # Consensus logic
+                high_risk_count = sum(1 for r in results if "High Risk" in r["Prediction"])
+                if high_risk_count >= 2:
+                    st.error("⚠️ **Consensus: High Risk**\n\nThe majority of models predict a high risk of hypertension. Clinical evaluation is strongly recommended.")
+                else:
+                    st.success("✅ **Consensus: Low Risk**\n\nThe majority of models predict a low risk. Continue routine health monitoring.")
+            except Exception as e:
+                st.error(f"Prediction failed. Please ensure the model was trained with these exact features. Error: {e}")
 
 elif page == "📈 Model Performance":
     st.title("📈 Model Performance Evaluation")
@@ -203,41 +220,11 @@ elif page == "🔍 Feature Importance":
     st.title("🔍 Feature Importance")
     st.markdown("Understanding which features drive the model's predictions is crucial for clinical interpretability.")
     
-    st.info("💡 *Note: KNN does not have native feature importance. Displaying XGBoost and Random Forest.*")
-    
-    tab1, tab2 = st.tabs(["🌳 Random Forest", "🚀 XGBoost"])
-    
-    with tab1:
-        rf_model = models['Random Forest']
-        # Extract feature names from the preprocessor
-        preprocessor = rf_model.named_steps['preprocessor']
-        # Get feature names after one-hot encoding
-        try:
-            feature_names_out = preprocessor.get_feature_names_out()
-        except:
-            feature_names_out = feature_names
-            
-        importances = rf_model.named_steps['classifier'].feature_importances_
-        
-        # Create a dataframe and sort
-        feat_imp_df = pd.DataFrame({'Feature': feature_names_out, 'Importance': importances})
-        feat_imp_df = feat_imp_df.sort_values(by='Importance', ascending=True).tail(10)
-        
-        fig = px.bar(
-            feat_imp_df, x='Importance', y='Feature', orientation='h',
-            color='Importance', color_continuous_scale='Viridis'
-        )
-        fig.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
-        st.plotly_chart(fig, use_container_width=True)
-
-    with tab2:
-        xgb_model = models['xgboost']
+    # Use XGBoost for feature importance as it's usually the most robust
+    if 'XGBoost' in models:
+        xgb_model = models['XGBoost']
         preprocessor = xgb_model.named_steps['preprocessor']
-        try:
-            feature_names_out = preprocessor.get_feature_names_out()
-        except:
-            feature_names_out = feature_names
-            
+        feature_names_out = preprocessor.get_feature_names_out()
         importances = xgb_model.named_steps['classifier'].feature_importances_
         
         feat_imp_df = pd.DataFrame({'Feature': feature_names_out, 'Importance': importances})
@@ -249,6 +236,8 @@ elif page == "🔍 Feature Importance":
         )
         fig.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
         st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("XGBoost model not found.")
 
 elif page == "ℹ️ About & Data Info":
     st.title("ℹ️ About the Model & Data")
